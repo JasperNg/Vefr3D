@@ -137,7 +137,7 @@ Vefr3D was tested on Windows 11 with Nvidia Driver 595.79 using Anaconda on both
    ```sh
    "Trellis2\ComfyUI-Easy-Install\Start ComfyUI FlashAttention.bat"
    ```
-2. Activate the environment
+2. Open a new CMD Terminal and activate the conda environment
    ```sh
    conda activate Vefr3D
    ```
@@ -145,7 +145,7 @@ Vefr3D was tested on Windows 11 with Nvidia Driver 595.79 using Anaconda on both
    ```sh
    uvicorn main:app --reload
    ```
-4. Push the API with ngrok (if necessary)
+4. Open a new CMD Terminal and push the API with ngrok (if necessary)
    ```sh
    ngrok http http://127.0.0.1:8000/ --url=YOUR_NGROK_URL
    ```
