@@ -22,7 +22,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/JasperNg/Vefr3D">
-    <img src="GitHubAssets/logo.png" alt="Logo" width="80" height="80">
+    <img src="GithubAssets/logo.png" alt="Logo" width="80" height="80">
   </a>
 
 <h3 align="center">Vefr3D</h3>
@@ -120,11 +120,11 @@ Vefr3D was tested on Windows 11 with Nvidia Driver 595.79 using Anaconda on both
 ### Install Plugin
 1. Zip the plugin folder
 2. Navigate to Blender Preferences' System tab to allow Online Access
-  <br/>
-  ![net-access][netaccess-screenshot]
+   <br/>
+   ![net-access][netaccess-screenshot]
 3. Navigate to Blender Preferences' Get Extensions and install the Zip file
-  <br/>
-  ![install-disk][disk-screenshot]
+   <br/>
+   ![install-disk][disk-screenshot]
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
