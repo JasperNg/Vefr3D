@@ -108,6 +108,12 @@ class COMFYUI_OT_pick_image(bpy.types.Operator):
     
     #Opens file browser
     def invoke(self, context, event):
+        default_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "testimages",
+        )
+        if os.path.isdir(default_dir):
+            self.filepath = default_dir + os.sep
         context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
     
