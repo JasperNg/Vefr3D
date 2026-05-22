@@ -68,7 +68,7 @@
 <p align="center">
   <img src="GithubAssets/plugin.png" alt="Plugin Screen Shot">
 </p>
-Vefr3D is a self-hosted 3D model generation toolkit designed for game development studios. The Blender plugin connects to a FastAPI server serving a ComfyUI workflow. 
+Vefr3D is a self-hosted 3D model generation toolkit designed for game development studios. The Blender plugin connects to a FastAPI server serving a ComfyUI workflow delivering the generated GLB model into the viewport. 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
