@@ -17,7 +17,8 @@ GENERATION_TIMEOUT = 600
 WS_RECV_TIMEOUT = 30
 
 def get_prompt_with_workflow(input, ext):
-    prompt_json = json.loads(f.read(workflow_path))
+    with open(workflow_path, "r", encoding="utf-8") as f:
+        prompt_json = json.load(f)
     prompt_json["176"]["inputs"]["image"] = f'"{imgpath}\{input}{ext}"'
     prompt_json["166"]["inputs"]["value"] = input
     return prompt_json
