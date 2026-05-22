@@ -1,0 +1,24 @@
+schema_version = "1.0.0"
+
+id = "vefr_3d"
+version = "1.2.0"
+name = "Vefr3D"
+tagline = "Send an image to a ComfyUI server and import the generated GLB"
+maintainer = "Jasper Ng <jasperdng@gmail.com>"
+type = "add-on"
+
+# 4.2 is the first Blender version with the extension system.
+blender_version_min = "4.2.0"
+
+# SPDX license identifier — change if your project uses a different license.
+license = [
+  "SPDX:GPL-2.0-or-later",
+]
+
+# Where the add-on appears in the Extensions UI.
+tags = ["3D View", "Import-Export"]
+
+# Network access is required to talk to the FastAPI server.
+[permissions]
+network = "Connect to a user-configured ComfyUI/FastAPI server to upload images and download generated GLB files"
+files = "Read the user-selected input image and write a temporary GLB file for import"
