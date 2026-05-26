@@ -114,7 +114,7 @@ Vefr3D was tested on Windows 11 with Nvidia Driver 595.79 using Anaconda on both
    import secrets
    secrets.token_urlsafe(24)
    ```
-4. Add the API to your Windows environment variables as `CUI_API_KEY`
+4. Add the API key to your Windows environment variables as `CUI_API_KEY`
 5. Download and install [ComfyUI-Easy-Install](https://github.com/Tavris1/ComfyUI-Easy-Install) in the Trellis 2 folder with Flash Attention and Torch 2.8.0
 
 ### Install Plugin
