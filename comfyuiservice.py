@@ -49,7 +49,6 @@ def get_model(ws, prompt, filename_to_find, client_id):
             return None
 
         if not isinstance(out, str):
-            # Binary preview frames; ignore.
             continue
 
         try:
@@ -60,7 +59,6 @@ def get_model(ws, prompt, filename_to_find, client_id):
         msg_type = message.get('type')
         data = message.get('data', {})
 
-        # ComfyUI signals failure via these messages.
         if msg_type in ('execution_error', 'execution_interrupted'):
             if data.get('prompt_id') == prompt_id:
                 print(f"ComfyUI reported {msg_type} for prompt {prompt_id}: {data}")
@@ -75,8 +73,7 @@ def get_model(ws, prompt, filename_to_find, client_id):
         print(f"Timed out waiting for prompt {prompt_id} after {GENERATION_TIMEOUT}s")
         return None
 
-    # Poll the history endpoint to confirm completion and pick up the file
-    # once it's been flushed to disk (avoids race with the executing message).
+
     poll_deadline = time.monotonic() + 30
     while time.monotonic() < poll_deadline:
         try:
@@ -90,7 +87,6 @@ def get_model(ws, prompt, filename_to_find, client_id):
             files = list(Path(model_path).glob(f'{filename_to_find}*.glb'))
             if files:
                 return str(files[0])
-            # Completed but file not visible yet; brief retry.
             time.sleep(0.5)
             files = list(Path(model_path).glob(f'{filename_to_find}*.glb'))
             return str(files[0]) if files else None
