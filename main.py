@@ -66,7 +66,7 @@ async def create_upload_file(background_tasks: BackgroundTasks, file: UploadFile
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
 
-    # Cheap pre-check using the header-reported size (may be None)
+
     if file.size is not None and file.size > MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=413,
@@ -75,7 +75,7 @@ async def create_upload_file(background_tasks: BackgroundTasks, file: UploadFile
 
     inputpath = f"{IMAGEDIR}/{unique_id}{ext}"
 
-    # Stream to disk in chunks, enforcing the cap as we go
+
     written = 0
     try:
         with open(inputpath, "wb") as f:
@@ -114,7 +114,7 @@ async def create_upload_file(background_tasks: BackgroundTasks, file: UploadFile
             pass
         raise HTTPException(status_code=400, detail="File is not a valid image or is too large.")
 
-    #generate (limit to 1 concurrent generation)
+
     async with _generation_semaphore:
         model_path = await run_in_threadpool(
             comfyuiservice.fetch_model_from_comfy, unique_id, ext
