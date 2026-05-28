@@ -35,7 +35,7 @@ def verify_api_key(key: str = Security(_api_key_header)):
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
 _ALLOWED_HOSTS = [
-    h.strip() for h in os.environ.get("CUI_ALLOWED_HOSTS", "liana-smuggest-ariah.ngrok-free.app,localhost,127.0.0.1").split(",") if h.strip()
+    h.strip() for h in os.environ.get("CUI_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()
 ]
 
 app = FastAPI()
