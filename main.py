@@ -41,11 +41,10 @@ _ALLOWED_HOSTS = [
 app = FastAPI()
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=_ALLOWED_HOSTS)
 
-# Limit concurrent generations to 1 (Trellis is GPU-heavy).
+
 _generation_semaphore = asyncio.Semaphore(1)
 
 async def cleanup_files_task(*filepaths: str):
-    # Waits for a specified delay and then deletes the files.
     if CLEANUP_DELAY > 0:
         await asyncio.sleep(CLEANUP_DELAY)
     
