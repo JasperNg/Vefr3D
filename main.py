@@ -66,13 +66,6 @@ async def create_upload_file(background_tasks: BackgroundTasks, file: UploadFile
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
 
-
-    if file.size is not None and file.size > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Max {MAX_UPLOAD_BYTES // (1024*1024)} MB."
-        )
-
     inputpath = f"{IMAGEDIR}/{unique_id}{ext}"
 
 
