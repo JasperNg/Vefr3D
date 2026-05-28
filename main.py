@@ -34,8 +34,6 @@ def verify_api_key(key: str = Security(_api_key_header)):
     if not key or not hmac.compare_digest(key, _API_KEY):
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
-# Allowed hosts for TrustedHostMiddleware. Set CUI_ALLOWED_HOSTS as a
-# comma-separated list (e.g. "your-subdomain.ngrok-free.app,localhost").
 _ALLOWED_HOSTS = [
     h.strip() for h in os.environ.get("CUI_ALLOWED_HOSTS", "liana-smuggest-ariah.ngrok-free.app,localhost,127.0.0.1").split(",") if h.strip()
 ]
@@ -107,9 +105,6 @@ async def create_upload_file(background_tasks: BackgroundTasks, file: UploadFile
             pass
         raise HTTPException(status_code=500, detail="Failed to save uploaded image. Image is too large")
     
-    #Check if image is actually an image and not a decompression bomb.
-    # verify() only checks headers; load() actually decodes pixels and will
-    # raise DecompressionBombError if the image exceeds Image.MAX_IMAGE_PIXELS.
     try:
         with Image.open(inputpath) as img:
             img.load()
