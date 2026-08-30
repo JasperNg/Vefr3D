@@ -15,11 +15,13 @@ workflow_path = Path(__file__).parent / "workflow.json"
 
 GENERATION_TIMEOUT = 600
 WS_RECV_TIMEOUT = 30
+HTTP_TIMEOUT = 10
 
 def get_prompt_with_workflow(input, ext):
     with open(workflow_path, "r", encoding="utf-8") as f:
         prompt_json = json.load(f)
-    prompt_json["176"]["inputs"]["image"] = f'"{imgpath}\{input}{ext}"'
+    image_file = imgpath / f"{input}{ext}"
+    prompt_json["176"]["inputs"]["image"] = f'"{image_file}"'
     prompt_json["166"]["inputs"]["value"] = input
     return prompt_json
 
@@ -27,11 +29,28 @@ def queue_prompt(prompt, client_id):
     p = {"prompt": prompt, "client_id": client_id}
     data = json.dumps(p).encode('utf-8')
     req =  urllib.request.Request("http://{}/prompt".format(server_address), data=data)
-    return json.loads(urllib.request.urlopen(req).read())
+    return json.loads(urllib.request.urlopen(req, timeout=HTTP_TIMEOUT).read())
 
 def get_history(prompt_id):
-    with urllib.request.urlopen(f"http://{server_address}/history/{prompt_id}") as resp:
+    with urllib.request.urlopen(
+        f"http://{server_address}/history/{prompt_id}", timeout=HTTP_TIMEOUT
+    ) as resp:
         return json.loads(resp.read())
+
+
+def get_generated_artifacts(filename_prefix):
+    """Return every file produced for an app-generated UUID prefix."""
+    if not filename_prefix.startswith("vefr3d-"):
+        return []
+    try:
+        uuid.UUID(filename_prefix.removeprefix("vefr3d-"))
+    except (ValueError, AttributeError, TypeError):
+        return []
+    return [
+        str(path)
+        for path in Path(model_path).glob(f"{filename_prefix}*")
+        if path.is_file()
+    ]
 
 def get_model(ws, prompt, filename_to_find, client_id):
     prompt_id = queue_prompt(prompt, client_id)['prompt_id']
@@ -61,7 +80,7 @@ def get_model(ws, prompt, filename_to_find, client_id):
 
         if msg_type in ('execution_error', 'execution_interrupted'):
             if data.get('prompt_id') == prompt_id:
-                print(f"ComfyUI reported {msg_type} for prompt {prompt_id}: {data}")
+                print(f"ComfyUI reported {msg_type} for prompt {prompt_id}")
                 return None
 
         if msg_type == 'executing':

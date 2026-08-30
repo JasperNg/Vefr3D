@@ -103,10 +103,9 @@ Vefr3D was tested on Windows 11 with Nvidia Driver 595.79 using Anaconda on both
    ```sh
    git clone https://github.com/JasperNg/Vefr3D.git
    ```
-2. Create conda environment from the yaml file
+2. Create the conda environment from the YAML file
    ```sh
-   cd envs
-   conda create --file environment.yml
+   conda env create --file envs/environment.yaml
    ```
 3. Activate your environment and create your API key
    ```py
@@ -114,7 +113,10 @@ Vefr3D was tested on Windows 11 with Nvidia Driver 595.79 using Anaconda on both
    import secrets
    secrets.token_urlsafe(24)
    ```
-4. Add the API key to your Windows environment variables as `CUI_API_KEY`
+4. Add the API key to your Windows environment variables as `CUI_API_KEY`.
+   Optional server limits can be configured with `CUI_MAX_ACTIVE_REQUESTS`
+   (default `2`), `CUI_RATE_LIMIT_PER_MINUTE` (default `6`), and
+   `CUI_STALE_ARTIFACT_SECONDS` (default `86400`).
 5. Download and install [ComfyUI-Easy-Install](https://github.com/Tavris1/ComfyUI-Easy-Install) in the Trellis 2 folder with Flash Attention and Torch 2.8.0
 
 ### Install Plugin
@@ -125,6 +127,11 @@ Vefr3D was tested on Windows 11 with Nvidia Driver 595.79 using Anaconda on both
 3. Navigate to Blender Preferences' Get Extensions and install the Zip file
    <br/>
    ![install-disk][disk-screenshot]
+4. Enter the server URL and API key in the Vefr3D panel. The API key and selected
+   image path are session-only and are not saved in `.blend` files or Blender
+   preferences. Remote server URLs must use HTTPS; HTTP is accepted only for
+   localhost/loopback development. Model downloads are streamed to disk, capped
+   at 256 MB, and validated as GLB version 2 before Blender imports them.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -143,12 +150,14 @@ Vefr3D was tested on Windows 11 with Nvidia Driver 595.79 using Anaconda on both
    ```
 3. Activate the server
    ```sh
-   uvicorn main:app --reload
+   uvicorn main:app --host 127.0.0.1 --port 8000
    ```
 4. Open a new CMD Terminal and push the API with ngrok (if necessary)
    ```sh
    ngrok http http://127.0.0.1:8000/ --url=YOUR_NGROK_URL
    ```
+   Set `CUI_ALLOWED_HOSTS` to the ngrok hostname and use the generated `https://`
+   URL in Blender.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -176,7 +185,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <!-- CONTACT -->
 ## Contact
 
-Jasper Ng - jasperdng@gmail.com
+Jasper Ng - maintainer@example.com
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

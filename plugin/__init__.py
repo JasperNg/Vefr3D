@@ -5,6 +5,136 @@ import threading
 import urllib.request
 import uuid
 import json
+import ipaddress
+import struct
+from urllib.parse import urlsplit
+
+
+_ADDON_ID = __package__ or __name__
+MAX_MODEL_BYTES = 256 * 1024 * 1024
+DOWNLOAD_CHUNK_BYTES = 1024 * 1024
+MAX_ERROR_RESPONSE_BYTES = 64 * 1024
+GLB_HEADER = struct.Struct("<4sII")
+
+
+def _validated_server_base_url(server_url: str) -> str:
+    """Require HTTPS except for an explicitly loopback development server."""
+    raw_url = server_url.strip().rstrip("/")
+    try:
+        parsed = urlsplit(raw_url)
+        hostname = parsed.hostname
+        # Accessing port validates malformed/out-of-range port values.
+        parsed.port
+    except ValueError as exc:
+        raise ValueError("Server URL is malformed.") from exc
+
+    if not hostname or parsed.scheme not in {"http", "https"}:
+        raise ValueError("Server URL must use HTTPS.")
+    if parsed.username or parsed.password:
+        raise ValueError("Server URL must not contain credentials.")
+    if parsed.query or parsed.fragment:
+        raise ValueError("Server URL must not contain a query string or fragment.")
+
+    is_loopback = hostname.lower() == "localhost"
+    try:
+        is_loopback = is_loopback or ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        pass
+
+    if parsed.scheme != "https" and not is_loopback:
+        raise ValueError("HTTPS is required for non-loopback servers.")
+
+    return raw_url
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Prevent redirects from forwarding the API key to another origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _response_content_length(response):
+    raw_length = response.headers.get("Content-Length")
+    if raw_length is None:
+        return None
+    try:
+        content_length = int(raw_length)
+    except ValueError as exc:
+        raise RuntimeError("Server returned an invalid Content-Length header.") from exc
+    if content_length < 0:
+        raise RuntimeError("Server returned an invalid Content-Length header.")
+    return content_length
+
+
+def _validate_glb_header(header: bytes, actual_length: int, http_length=None) -> None:
+    if len(header) < GLB_HEADER.size:
+        raise RuntimeError("Server returned a truncated GLB file.")
+
+    magic, version, declared_length = GLB_HEADER.unpack(header[:GLB_HEADER.size])
+    if magic != b"glTF":
+        raise RuntimeError("Server response is not a GLB file.")
+    if version != 2:
+        raise RuntimeError(f"Unsupported GLB version: {version}.")
+    if declared_length != actual_length:
+        raise RuntimeError("GLB header length does not match the downloaded file.")
+    if declared_length > MAX_MODEL_BYTES:
+        raise RuntimeError("Generated model exceeds the download size limit.")
+    if http_length is not None and http_length != actual_length:
+        raise RuntimeError("HTTP Content-Length does not match the downloaded file.")
+
+
+def _read_server_error(response, content_type: str):
+    response_body = response.read(MAX_ERROR_RESPONSE_BYTES + 1)
+    if len(response_body) > MAX_ERROR_RESPONSE_BYTES:
+        return f"Unexpected oversized response type: {content_type}"
+    try:
+        parsed = json.loads(response_body)
+    except (ValueError, UnicodeDecodeError):
+        return f"Unexpected response type: {content_type}"
+    if not isinstance(parsed, dict):
+        return f"Unexpected response type: {content_type}"
+    return parsed.get("detail") or parsed.get("error") or response_body[:200]
+
+
+def _download_glb_response(response) -> str:
+    content_type = response.headers.get("Content-Type", "")
+    media_type = content_type.split(";", 1)[0].strip().lower()
+    if media_type != "model/gltf-binary":
+        raise RuntimeError(f"Server error: {_read_server_error(response, content_type)}")
+
+    http_length = _response_content_length(response)
+    if http_length is not None and http_length > MAX_MODEL_BYTES:
+        raise RuntimeError("Generated model exceeds the download size limit.")
+
+    temp_file = tempfile.NamedTemporaryFile(suffix=".glb", delete=False)
+    temp_path = temp_file.name
+    total_bytes = 0
+    header = bytearray()
+    try:
+        while True:
+            chunk = response.read(DOWNLOAD_CHUNK_BYTES)
+            if not chunk:
+                break
+            total_bytes += len(chunk)
+            if total_bytes > MAX_MODEL_BYTES:
+                raise RuntimeError("Generated model exceeds the download size limit.")
+            if len(header) < GLB_HEADER.size:
+                needed = GLB_HEADER.size - len(header)
+                header.extend(chunk[:needed])
+            temp_file.write(chunk)
+
+        temp_file.close()
+        _validate_glb_header(bytes(header), total_bytes, http_length)
+        return temp_path
+    except Exception:
+        if not temp_file.closed:
+            temp_file.close()
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise
 
 # state_lock is a dictionary with the status of and the information from the daemon so that the main thread can reference it
 _state_lock = threading.Lock()
@@ -29,7 +159,7 @@ def _state_update(**kwargs):
 #Background thread - daemon that sends image to server and recieves the generated file
 def _upload_and_fetch(image_path: str, server_url: str, api_key: str) -> None:
     try:
-        url = server_url.rstrip("/") + "/gen-model/"
+        url = _validated_server_base_url(server_url) + "/gen-model/"
         filename = os.path.basename(image_path)
         ext = os.path.splitext(filename)[1].lower()
 
@@ -66,30 +196,45 @@ def _upload_and_fetch(image_path: str, server_url: str, api_key: str) -> None:
         )
 
         # Timeout and check for JSON error
-        with urllib.request.urlopen(req, timeout=600) as resp:
-            content_type = resp.headers.get("Content-Type", "")
-            response_body = resp.read()
-            if "model/gltf-binary" not in content_type:
-                # Try to decode JSON error from server
-                try:
-                    parsed = json.loads(response_body)
-                    err = parsed.get("detail") or parsed.get("error") or response_body[:200]
-                except ValueError:
-                    err = f"Unexpected response type: {content_type}"
-                raise RuntimeError(f"Server error: {err}")
-            glb_bytes = response_body
+        opener = urllib.request.build_opener(_NoRedirectHandler())
+        with opener.open(req, timeout=600) as resp:
+            glb_path = _download_glb_response(resp)
 
-        # Write to a named temp file that the main thread can import
-        tmp = tempfile.NamedTemporaryFile(suffix=".glb", delete=False)
-        tmp.write(glb_bytes)
-        tmp.close()
-
-        _state_update(glb_path=tmp.name, done=True, running=False)
+        _state_update(glb_path=glb_path, done=True, running=False)
 
     except Exception as exc:
         _state_update(error=str(exc), done=True, running=False)
 
 #-------------------Blender Classes-------------------------
+
+
+def _addon_preferences(context):
+    addon = context.preferences.addons.get(_ADDON_ID)
+    if addon is None:
+        raise RuntimeError("Vefr3D add-on preferences are unavailable.")
+    return addon.preferences
+
+
+class COMFYUI_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = _ADDON_ID
+
+    comfyui_server_url: bpy.props.StringProperty(
+        name="Server URL",
+        description="HTTPS base URL of the FastAPI server (HTTP is allowed only on loopback)",
+        default="http://localhost:8000",
+    )
+    comfyui_api_key: bpy.props.StringProperty(
+        name="API Key",
+        description="X-API-Key sent to the FastAPI server; never saved by Blender",
+        default="",
+        subtype="PASSWORD",
+        options={"SKIP_SAVE"},
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "comfyui_server_url")
+        layout.prop(self, "comfyui_api_key")
 
 # Blender File Dialog Picker
 class COMFYUI_OT_pick_image(bpy.types.Operator):
@@ -200,12 +345,23 @@ class COMFYUI_OT_generate(bpy.types.Operator):
             self.report({"ERROR"}, f"File not found: {image_path}")
             return {"CANCELLED"}
 
-        server_url = context.scene.comfyui_server_url
+        try:
+            preferences = _addon_preferences(context)
+        except RuntimeError as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+
+        server_url = preferences.comfyui_server_url
         if not server_url:
             self.report({"ERROR"}, "Server URL is empty.")
             return {"CANCELLED"}
+        try:
+            server_url = _validated_server_base_url(server_url)
+        except ValueError as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
 
-        api_key = context.scene.comfyui_api_key
+        api_key = preferences.comfyui_api_key
         if not api_key:
             self.report({"ERROR"}, "API key is empty.")
             return {"CANCELLED"}
@@ -272,8 +428,13 @@ class COMFYUI_PT_panel(bpy.types.Panel):
         # Server URL + API key
         box = layout.box()
         box.label(text="Server", icon="WORLD")
-        box.prop(scene, "comfyui_server_url", text="URL")
-        box.prop(scene, "comfyui_api_key", text="API Key")
+        try:
+            preferences = _addon_preferences(context)
+        except RuntimeError as exc:
+            box.label(text=str(exc), icon="ERROR")
+            return
+        box.prop(preferences, "comfyui_server_url", text="URL")
+        box.prop(preferences, "comfyui_api_key", text="API Key")
 
         layout.separator()
 
@@ -297,6 +458,7 @@ class COMFYUI_PT_panel(bpy.types.Panel):
 
 # Registration - 
 _classes = (
+    COMFYUI_AddonPreferences,
     COMFYUI_OT_pick_image,
     COMFYUI_OT_generate,
     COMFYUI_PT_panel,
@@ -307,21 +469,11 @@ def register():
     for cls in _classes:
         bpy.utils.register_class(cls)
 
-    bpy.types.Scene.comfyui_server_url = bpy.props.StringProperty(
-        name="Server URL",
-        description="Base URL of the FastAPI server (main.py)",
-        default="http://localhost:8000",
-    )
     bpy.types.Scene.comfyui_image_path = bpy.props.StringProperty(
         name="Image Path",
-        description="Path to the input image (.png / .jpg / .jpeg / .webp)",
+        description="Path to the input image (.png / .jpg / .jpeg)",
         default="",
-    )
-    bpy.types.Scene.comfyui_api_key = bpy.props.StringProperty(
-        name="API Key",
-        description="X-API-Key sent to the FastAPI server",
-        default="",
-        subtype="PASSWORD",
+        options={"SKIP_SAVE"},
     )
 
 
@@ -329,9 +481,7 @@ def unregister():
     for cls in reversed(_classes):
         bpy.utils.unregister_class(cls)
 
-    del bpy.types.Scene.comfyui_server_url
     del bpy.types.Scene.comfyui_image_path
-    del bpy.types.Scene.comfyui_api_key
 
 
 if __name__ == "__main__":
