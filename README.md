@@ -185,7 +185,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <!-- CONTACT -->
 ## Contact
 
-Jasper Ng - maintainer@example.com
+Jasper Ng
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
