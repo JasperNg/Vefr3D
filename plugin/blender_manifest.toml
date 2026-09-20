@@ -12,7 +12,7 @@ blender_version_min = "4.2.0"
 
 # SPDX license identifier — change if your project uses a different license.
 license = [
-  "SPDX:GPL-2.0-or-later",
+  "SPDX:MIT",
 ]
 
 # Where the add-on appears in the Extensions UI.
